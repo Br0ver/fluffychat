@@ -30,6 +30,7 @@ import 'html_message.dart';
 import 'image_bubble.dart';
 import 'map_bubble.dart';
 import 'message_download_content.dart';
+import 'signal_message_widget.dart';
 
 class MessageContent extends StatelessWidget {
   final Event event;
@@ -244,6 +245,12 @@ class MessageContent extends StatelessWidget {
               }
             }
             continue textmessage;
+          case 'io.dummywa.signal':
+            return SignalMessageWidget(
+              event: event,
+              textColor: textColor,
+              fontSize: fontSize,
+            );
           case MessageTypes.Text:
           case MessageTypes.Notice:
           case MessageTypes.Emote:

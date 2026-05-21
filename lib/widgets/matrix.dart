@@ -32,6 +32,7 @@ import 'package:url_launcher/url_launcher_string.dart';
 
 import '../config/setting_keys.dart';
 import '../pages/key_verification/key_verification_dialog.dart';
+import '../signal/index.dart';
 import '../utils/account_bundles.dart';
 import '../utils/background_push.dart';
 import 'local_notifications_extension.dart';
@@ -183,6 +184,7 @@ class MatrixState extends State<Matrix> with WidgetsBindingObserver {
   final onNotification = <String, StreamSubscription>{};
   final onLogoutSub = <String, StreamSubscription<LoginState>>{};
   final onUiaRequest = <String, StreamSubscription<UiaRequest>>{};
+  final onSignalBridgeInfoSub = <String, StreamSubscription>{};
 
   String? _cachedPassword;
   Timer? _cachedPasswordClearTimer;
@@ -296,6 +298,23 @@ class MatrixState extends State<Matrix> with WidgetsBindingObserver {
         );
       });
     }
+
+    // Signal E2EE: watch for io.dummywa.bridge_info state events on this
+    // client and trigger key exchange via the per-user SignalMiddleware.
+    onSignalBridgeInfoSub[name] ??= c.onRoomState.stream.listen((update) {
+      if (update.state.type != 'io.dummywa.bridge_info') return;
+      final userId = c.userID;
+      if (userId == null) return;
+      final room = c.getRoomById(update.roomId);
+      if (room == null) return;
+      final middleware = getOrCreateSignalMiddleware(userId);
+      // Build a minimal raw-event map matching what onRoomStateEvent expects.
+      final rawEvent = {
+        'type': update.state.type,
+        'content': update.state.content,
+      };
+      middleware.onRoomStateEvent(rawEvent, room, c);
+    });
   }
 
   void _cancelSubs(String name) {
@@ -307,6 +326,8 @@ class MatrixState extends State<Matrix> with WidgetsBindingObserver {
     onLogoutSub.remove(name);
     onNotification[name]?.cancel();
     onNotification.remove(name);
+    onSignalBridgeInfoSub[name]?.cancel();
+    onSignalBridgeInfoSub.remove(name);
   }
 
   void initMatrix() {

@@ -45,6 +45,7 @@ import 'package:pasteboard/pasteboard.dart';
 import 'package:scroll_to_index/scroll_to_index.dart';
 import 'package:universal_html/universal_html.dart' as web;
 
+import '../../signal/index.dart';
 import '../../utils/account_bundles.dart';
 import '../../utils/localized_exception_extension.dart';
 import 'send_file_dialog.dart';
@@ -642,14 +643,30 @@ class ChatController extends State<ChatPageWithRoom>
       parseCommands = false;
     }
 
-    // ignore: unawaited_futures
-    room.sendTextEvent(
-      sendController.text,
-      inReplyTo: replyEvent,
-      editEventId: editEvent?.eventId,
-      parseCommands: parseCommands,
-      threadRootEventId: activeThreadId,
-    );
+    // Try Signal encryption if a session is established for this room.
+    final userId = sendingClient.userID;
+    final signalMiddleware =
+        userId != null ? getSignalMiddleware(userId) : null;
+    final signalContent = signalMiddleware != null
+        ? await signalMiddleware.encryptForRoom(
+            room,
+            sendController.text,
+          )
+        : null;
+
+    if (signalContent != null) {
+      // ignore: unawaited_futures
+      room.sendEvent(signalContent, threadRootEventId: activeThreadId);
+    } else {
+      // ignore: unawaited_futures
+      room.sendTextEvent(
+        sendController.text,
+        inReplyTo: replyEvent,
+        editEventId: editEvent?.eventId,
+        parseCommands: parseCommands,
+        threadRootEventId: activeThreadId,
+      );
+    }
     sendController.value = TextEditingValue(
       text: pendingText,
       selection: const TextSelection.collapsed(offset: 0),
